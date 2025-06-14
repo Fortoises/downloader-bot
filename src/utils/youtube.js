@@ -2,7 +2,7 @@ const { runYtDlp, getFileSize, compressFile, findDownloadedFile } = require('./c
 const fs = require('fs-extra');
 const path = require('path');
 
-async function handleYouTubeDownload(ctx, url, downloadDir, selectedType = null, selectedFormatId = null) {
+async function handleYouTubeDownload(ctx, url, downloadDir, cookiesDir, selectedType = null, selectedFormatId = null) { // Menerima cookiesDir
   const userId = ctx.from.id;
   const userDownloadDir = path.join(downloadDir, String(userId));
   await fs.ensureDir(userDownloadDir);
@@ -12,7 +12,8 @@ async function handleYouTubeDownload(ctx, url, downloadDir, selectedType = null,
       await ctx.reply('Menganalisis opsi kualitas YouTube...');
 
       // Dapatkan info format dari yt-dlp
-      const infoJson = await runYtDlp(['--dump-json', url.href], ctx, null); // Tidak perlu filename prefix di sini
+      // Meneruskan cookiesDir dan url.hostname
+      const infoJson = await runYtDlp(['--dump-json', url.href], ctx, null, cookiesDir, url.hostname);
       const videoInfo = JSON.parse(infoJson);
 
       // Filter format video dan audio terpisah
@@ -22,13 +23,13 @@ async function handleYouTubeDownload(ctx, url, downloadDir, selectedType = null,
       const audioOptions = [];
 
       for (const f of availableFormats) {
-        if (f.vcodec !== 'none' && f.acodec !== 'none') { // Video dengan audio
+        if (f.vcodec !== 'none' && f.acodec !== 'none' && f.height) { // Video dengan audio
           const sizeEstimateMB = ((f.filesize || f.filesize_approx) / (1024 * 1024)).toFixed(2);
           videoOptions.push({
-            text: `${f.height || 'N/A'}p (${sizeEstimateMB}MB)`, // Pakai height untuk resolusi
+            text: `${f.height}p (${sizeEstimateMB}MB)`, // Pakai height untuk resolusi
             callback_data: `youtube_video_${f.format_id}`
           });
-        } else if (f.acodec !== 'none' && f.vcodec === 'none') { // Audio saja
+        } else if (f.acodec !== 'none' && f.vcodec === 'none' && f.filesize_approx) { // Audio saja
           const sizeEstimateMB = ((f.filesize || f.filesize_approx) / (1024 * 1024)).toFixed(2);
           audioOptions.push({
             text: `Audio Only (${f.ext}, ${sizeEstimateMB}MB)`,
@@ -84,7 +85,8 @@ async function handleYouTubeDownload(ctx, url, downloadDir, selectedType = null,
       await ctx.reply(replyMessage);
 
       // Jalankan yt-dlp dan tunggu hingga selesai
-      await runYtDlp(args, ctx, filename); // yt-dlp akan menulis ke file di sini
+      // Meneruskan cookiesDir dan url.hostname
+      await runYtDlp(args, ctx, filename, cookiesDir, url.hostname);
 
       const downloadedFilePath = await findDownloadedFile(userDownloadDir, path.basename(filename));
 

@@ -2,7 +2,7 @@ const { runYtDlp, getFileSize, compressFile, findDownloadedFile, findDownloadedF
 const fs = require('fs-extra');
 const path = require('path');
 
-async function handleInstagramDownload(ctx, url, downloadDir) {
+async function handleInstagramDownload(ctx, url, downloadDir, cookiesDir) { // Menerima cookiesDir
   const userId = ctx.from.id;
   const userDownloadDir = path.join(downloadDir, String(userId));
   await fs.ensureDir(userDownloadDir);
@@ -13,17 +13,20 @@ async function handleInstagramDownload(ctx, url, downloadDir) {
     const filenamePrefix = path.join(userDownloadDir, `instagram_download_${Date.now()}`);
 
     // Dapatkan info JSON untuk menentukan tipe konten dan URL thumbnail profil
-    const infoJson = await runYtDlp(['--dump-json', url.href], ctx, null);
+    // Meneruskan cookiesDir dan url.hostname
+    const infoJson = await runYtDlp(['--dump-json', url.href], ctx, null, cookiesDir, url.hostname);
     const mediaInfo = JSON.parse(infoJson);
 
     // Cek apakah ini link profil untuk download foto profil
+    // Perbaikan: Pastikan match valid sebelum mengakses group 0
     if (url.pathname.match(/^\/[a-zA-Z0-9_.]+\/?$/) && mediaInfo.thumbnail) {
       await ctx.reply('Mendeteksi link profil Instagram. Mengunduh foto profil...');
       const profilePicUrl = mediaInfo.thumbnail;
       const picFilename = path.join(userDownloadDir, `profile_pic_${Date.now()}.jpg`);
       
       // Unduh foto profil langsung dari URL thumbnail
-      await runYtDlp([profilePicUrl, '-o', picFilename], ctx, picFilename);
+      // Meneruskan cookiesDir dan url.hostname
+      await runYtDlp([profilePicUrl, '-o', picFilename], ctx, picFilename, cookiesDir, url.hostname);
 
       const downloadedFilePath = await findDownloadedFile(userDownloadDir, path.basename(picFilename));
       if (!downloadedFilePath) {
@@ -56,7 +59,8 @@ async function handleInstagramDownload(ctx, url, downloadDir) {
         '-o', `${filenamePrefix}.%(ext)s`,
       ];
 
-      await runYtDlp(args, ctx, filenamePrefix); // yt-dlp akan menulis ke file di sini
+      // Meneruskan cookiesDir dan url.hostname
+      await runYtDlp(args, ctx, filenamePrefix, cookiesDir, url.hostname); 
 
       // Temukan semua file yang diunduh (untuk slide/multi-post)
       const downloadedFiles = await findDownloadedFiles(userDownloadDir, path.basename(filenamePrefix));

@@ -4,13 +4,10 @@ const path = require('path');
 const { handleYouTubeDownload } = require('./utils/youtube');
 const { handleTikTokDownload } = require('./utils/tiktok');
 const { handleInstagramDownload } = require('./utils/instagram');
-const { getFileSize } = require('./utils/common'); // Hanya ambil getFileSize
 
-async function setupBot(bot, downloadDir) {
-  // Callback queries harus diinisialisasi di sini karena memerlukan akses ke `bot` instance
-  // dan `downloadDir` (atau bisa pass via `ctx.state` atau closure jika diperlukan)
-
-  // Contoh generic handler untuk callback query (akan diproses lebih spesifik di masing-masing util)
+// Terima cookiesDir sebagai argumen baru
+async function setupBot(bot, downloadDir, cookiesDir) { 
+  // Callback queries handler
   bot.on('callback_query', async (ctx) => {
     const data = ctx.callbackQuery.data;
     const userId = ctx.from.id;
@@ -18,14 +15,15 @@ async function setupBot(bot, downloadDir) {
     await fs.ensureDir(userDownloadDir);
 
     try {
+      // YouTube callback handling
       if (data.startsWith('youtube_')) {
         const [, type, formatId] = data.split('_');
-        const originalUrl = ctx.callbackQuery.message.text.split('\n')[0].replace('Memproses link Anda, mohon tunggu sebentar...', '').trim(); // Ini sedikit hacky, lebih baik simpan URL di session
         
-        // Asumsi URL asli disimpan di suatu tempat atau bisa diambil dari konteks chat sebelumnya
-        // Untuk demo ini, kita akan coba ambil dari pesan sebelumnya
-        // Di aplikasi nyata, Anda bisa menyimpan URL di session Telegraf
-        const messages = await bot.telegram.getChatHistory(ctx.chat.id, { limit: 2 });
+        // **PERBAIKAN:** Ambil URL asli dari session atau mekanisme penyimpanan lain.
+        // Metode history messages ini sangat tidak reliable.
+        // Untuk demo ini, kita akan coba ambil dari pesan sebelumnya,
+        // tapi di produksi, pakai Telegraf.session atau database.
+        const messages = await ctx.telegram.getChatHistory(ctx.chat.id, { limit: 2 });
         const urlFromHistory = messages.messages.find(msg => msg.text && msg.text.startsWith('http'))?.text;
         
         if (!urlFromHistory) {
@@ -37,24 +35,31 @@ async function setupBot(bot, downloadDir) {
         await ctx.answerCbQuery(`Mengunduh ${type === 'video' ? 'video' : 'audio'}...`);
         await ctx.reply(`Mengunduh ${type === 'video' ? 'video' : 'audio'} dengan kualitas ${formatId}...`);
 
-        const filename = path.join(userDownloadDir, `youtube_download_${Date.now()}`);
-        await handleYouTubeDownload(ctx, new URL(urlFromHistory), downloadDir, type, formatId);
+        // Meneruskan cookiesDir ke handleYouTubeDownload
+        await handleYouTubeDownload(ctx, new URL(urlFromHistory), downloadDir, cookiesDir, type, formatId);
 
-      } else if (data.startsWith('tiktok_audio_')) {
+      } 
+      // TikTok audio callback handling
+      else if (data.startsWith('tiktok_audio_')) {
         const [, , videoId] = data.split('_');
         await ctx.answerCbQuery('Mengunduh audio TikTok...');
         await ctx.reply('Mengunduh audio TikTok...');
 
-        // Untuk TikTok audio, kita perlu merekonstruksi URL asli jika tidak disimpan
-        // Ini contoh paling sederhana, mungkin perlu disempurnakan
-        const url = `https://www.tiktok.com/t/${videoId}/`; // Ini mungkin tidak selalu bekerja, lebih baik simpan URL lengkap
-        await handleTikTokDownload(ctx, new URL(url), downloadDir, true); // True untuk menandakan audio
+        // REKONSTRUKSI URL: Ini tetap tidak ideal. Lebih baik simpan URL lengkap di callback data atau session.
+        const url = `https://www.tiktok.com/t/${videoId}/`; 
+        // Meneruskan cookiesDir ke handleTikTokDownload
+        await handleTikTokDownload(ctx, new URL(url), downloadDir, cookiesDir, true); // true untuk menandakan audio
       }
+      // Anda bisa menambahkan callback handler lain di sini jika ada (misal dari Instagram)
+
     } catch (error) {
       console.error('Error in callback query handler:', error);
       await ctx.reply('Terjadi kesalahan saat memproses permintaan Anda.');
     } finally {
-      await fs.emptyDir(userDownloadDir);
+      // Pastikan userDownloadDir selalu dibersihkan
+      if (await fs.pathExists(userDownloadDir)) {
+          await fs.emptyDir(userDownloadDir);
+      }
     }
   });
 
@@ -74,13 +79,14 @@ async function setupBot(bot, downloadDir) {
 
     await ctx.reply('Memproses link Anda, mohon tunggu sebentar...');
 
-    // Deteksi berdasarkan hostname
+    // Deteksi berdasarkan hostname dan panggil handler yang sesuai
+    // Meneruskan cookiesDir ke masing-masing handler
     if (url.hostname.includes('youtube.com') || url.hostname.includes('youtu.be')) {
-      await handleYouTubeDownload(ctx, url, downloadDir);
+      await handleYouTubeDownload(ctx, url, downloadDir, cookiesDir);
     } else if (url.hostname.includes('tiktok.com')) {
-      await handleTikTokDownload(ctx, url, downloadDir);
+      await handleTikTokDownload(ctx, url, downloadDir, cookiesDir);
     } else if (url.hostname.includes('instagram.com')) {
-      await handleInstagramDownload(ctx, url, downloadDir);
+      await handleInstagramDownload(ctx, url, downloadDir, cookiesDir);
     } else {
       await ctx.reply('Maaf, link ini tidak didukung. Saya hanya mendukung TikTok, Instagram, dan YouTube.');
     }

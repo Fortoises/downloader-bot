@@ -2,7 +2,7 @@ const { runYtDlp, getFileSize, compressFile, findDownloadedFile, findDownloadedF
 const fs = require('fs-extra');
 const path = require('path');
 
-async function handleTikTokDownload(ctx, url, downloadDir, isAudioOnly = false) {
+async function handleTikTokDownload(ctx, url, downloadDir, cookiesDir, isAudioOnly = false) { // Menerima cookiesDir
   const userId = ctx.from.id;
   const userDownloadDir = path.join(downloadDir, String(userId));
   await fs.ensureDir(userDownloadDir);
@@ -13,19 +13,21 @@ async function handleTikTokDownload(ctx, url, downloadDir, isAudioOnly = false) 
 
   try {
     // Dapatkan info JSON untuk menentukan tipe konten
-    const infoJson = await runYtDlp(['--dump-json', url.href], ctx, null); // Tidak perlu filename di sini
+    // Meneruskan cookiesDir dan url.hostname
+    const infoJson = await runYtDlp(['--dump-json', url.href], ctx, null, cookiesDir, url.hostname);
     const videoInfo = JSON.parse(infoJson);
 
     if (isAudioOnly) {
       await ctx.reply('Mengunduh audio dari TikTok...');
       const audioFilename = `${filenamePrefix}_audio.%(ext)s`;
+      // Meneruskan cookiesDir dan url.hostname
       await runYtDlp([
         '-f', 'bestaudio/best',
         '--extract-audio',
         '--audio-format', 'mp3', // Atau 'm4a', 'opus'
         url.href,
         '-o', audioFilename
-      ], ctx, audioFilename);
+      ], ctx, audioFilename, cookiesDir, url.hostname);
 
       const downloadedFilePath = await findDownloadedFile(userDownloadDir, path.basename(audioFilename.replace('.%(ext)s', '')));
       if (!downloadedFilePath) {
@@ -56,11 +58,12 @@ async function handleTikTokDownload(ctx, url, downloadDir, isAudioOnly = false) 
         if (entry.url && entry.ext) {
           const photoFilename = path.join(userDownloadDir, `tiktok_photo_${Date.now()}_${i}.${entry.ext}`);
           // Unduh setiap foto satu per satu
+          // Meneruskan cookiesDir dan url.hostname
           await runYtDlp([
             entry.url,
             '-o', photoFilename,
             '--no-playlist' // Pastikan hanya satu entry yang diunduh
-          ], ctx, photoFilename);
+          ], ctx, photoFilename, cookiesDir, url.hostname);
 
           const downloadedFilePath = await findDownloadedFile(userDownloadDir, path.basename(photoFilename));
           if (!downloadedFilePath) {
@@ -90,12 +93,13 @@ async function handleTikTokDownload(ctx, url, downloadDir, isAudioOnly = false) 
       await ctx.reply('Mendeteksi video TikTok. Mengunduh video kualitas terbaik...');
 
       const videoFilename = `${filenamePrefix}.%(ext)s`;
+      // Meneruskan cookiesDir dan url.hostname
       await runYtDlp([
         '-f', 'bestvideo+bestaudio/best', // Kualitas terbaik
         '--merge-output-format', 'mp4', // Gabungkan jika video dan audio terpisah
         url.href,
         '-o', videoFilename,
-      ], ctx, videoFilename);
+      ], ctx, videoFilename, cookiesDir, url.hostname);
 
       const downloadedFilePath = await findDownloadedFile(userDownloadDir, path.basename(filenamePrefix));
       if (!downloadedFilePath) {

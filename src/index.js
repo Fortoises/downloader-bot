@@ -5,13 +5,16 @@ const fs = require('fs-extra');
 const path = require('path');
 
 const DOWNLOAD_DIR = path.join(__dirname, '..', 'downloads');
+const COOKIES_DIR = path.join(__dirname, '..', 'cookies'); // Mendefinisikan direktori cookies
 
-// Pastikan direktori downloads ada saat bot dimulai
+// Pastikan direktori downloads dan cookies ada saat bot dimulai
 fs.ensureDirSync(DOWNLOAD_DIR);
+fs.ensureDirSync(COOKIES_DIR);
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
-setupBot(bot, DOWNLOAD_DIR);
+// Meneruskan COOKIES_DIR ke setupBot
+setupBot(bot, DOWNLOAD_DIR, COOKIES_DIR);
 
 bot.launch()
   .then(() => console.log('Bot started!'))
@@ -28,4 +31,3 @@ process.once('SIGTERM', () => {
   bot.stop('SIGTERM');
   fs.emptyDirSync(DOWNLOAD_DIR); // Bersihkan direktori downloads saat stop
 });
-
