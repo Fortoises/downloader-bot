@@ -1,0 +1,26 @@
+{
+  "name": "telegram-downloader-bot",
+  "version": "1.0.0",
+  "description": "Telegram Bot for downloading from TikTok, Instagram, and YouTube using yt-dlp.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "keywords": [
+    "telegram-bot",
+    "downloader",
+    "tiktok",
+    "instagram",
+    "youtube",
+    "yt-dlp",
+    "nodejs"
+  ],
+  "author": "Fixsed",
+  "license": "MIT",
+  "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "dotenv": "^16.4.5",
+    "fs-extra": "^11.2.0",
+    "telegraf": "^4.16.0"
+  }
+}
